@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Inventario de Crafteo</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Nunito:wght@400;600;700;800&display=swap');
 
@@ -1134,7 +1135,7 @@ Zafiro;Mineros" style="width:100%; box-sizing:border-box; padding:8px 10px; bord
       <div class="manage-form">
         <details class="manage-collapse" style="margin-bottom:14px;">
           <summary class="manage-title manage-collapse-summary" style="font-size:13px;">📥 Importar varias recetas de golpe (con o sin ingredientes) — Pulsa para desplegar</summary>
-          <label class="field-label">Un bloque por receta, separados por una linea en blanco. Primera linea = nombre de la receta (con o sin ":" al final). Las siguientes = ingredientes — admite pegar tal cual "30x Marfil, 25x Piel de Cerdo de Farle, ..." todo seguido con comas, o "Recurso;Cantidad" uno por linea. Si dejas una receta sin ingredientes, se crea vacia para editarla luego. Los recursos que no existan se crean solos con precio 0.</label>
+          <label class="field-label">Un bloque por receta, separados por una linea en blanco. Primera linea = nombre de la receta (con o sin ":" al final). Las siguientes = ingredientes — admite pegar tal cual "30x Marfil, 25x Piel de Cerdo de Farle, ..." todo seguido con comas, "Recurso;Cantidad" uno por linea, o el formato "[Objeto]=25x[Ingrediente A]+20x[Ingrediente B]+..." en una sola linea por receta. Si dejas una receta sin ingredientes, se crea vacia para editarla luego. Los recursos que no existan se crean solos con precio 0.</label>
           <textarea id="bulk-rec-input" rows="8" placeholder="Collar del dragocerdo:
 30x Marfil, 25x Piel de Cerdo de Farle, 15x Piel de Bworka, 1x Pelo de dragocerdo
 
@@ -1173,7 +1174,7 @@ Oro;3" style="width:100%; box-sizing:border-box; padding:8px 10px; border-radius
         <div class="manage-subhead">2️⃣ Ingredientes</div>
         <details class="manage-collapse">
           <summary class="manage-title manage-collapse-summary" style="font-size:13px;">📥 Pegar todos de golpe — mas rapido si ya tienes la lista copiada</summary>
-          <label class="field-label">Pega el texto tal cual lo copies, por ejemplo "30x Marfil, 25x Piel de Cerdo de Farle, 15x Piel de Bworka, 1x Pelo de dragocerdo" (con comas, todo seguido) — o si lo prefieres, "Recurso;Cantidad" uno por linea. Se anaden a la lista de abajo, fusionando si repites algun recurso.</label>
+          <label class="field-label">Pega el texto tal cual lo copies, por ejemplo "30x Marfil, 25x Piel de Cerdo de Farle, 15x Piel de Bworka, 1x Pelo de dragocerdo" (con comas, todo seguido), o el formato "[Objeto]=25x[Ingrediente A]+20x[Ingrediente B]+..." (si el nombre de la receta esta vacio, se rellena solo con lo del primer corchete). Se anaden a la lista de abajo, fusionando si repites algun recurso.</label>
           <textarea id="rec-bulk-ingredients-input" rows="4" placeholder="30x Marfil, 25x Piel de Cerdo de Farle, 15x Piel de Bworka, 1x Pelo de dragocerdo" style="width:100%; box-sizing:border-box; padding:8px 10px; border-radius:6px; border:2px solid #8c7a4a; background:#f5f0dc; color:#2e2418; font-family:'Nunito',sans-serif; font-size:13px;"></textarea>
           <button type="button" class="reset-order-btn" id="btn-bulk-ingredients">📥 Anadir estos ingredientes a la lista</button>
         </details>
@@ -1354,6 +1355,7 @@ Oro;3" style="width:100%; box-sizing:border-box; padding:8px 10px; border-radius
     <button class="backup-btn" id="btn-export">💾 Exportar mi progreso</button>
     <label class="backup-btn" for="import-file" style="display:inline-block;">📂 Importar progreso</label>
     <input type="file" id="import-file" accept="application/json,.json" style="position:absolute; width:1px; height:1px; opacity:0; overflow:hidden;">
+    <button class="backup-btn" id="btn-open-inventory-photo">📷 Importar inventario desde foto (beta)</button>
   </div>
   <footer>Tu progreso ya viene guardado dentro de este mismo archivo. Los cambios que sigas haciendo se guardan ademas solos en este navegador (localStorage); usa "Exportar" cuando quieras pasarlos a otro dispositivo o pedirme que los deje sellados aqui de nuevo.</footer>
   </div>
@@ -1416,6 +1418,31 @@ Oro;3" style="width:100%; box-sizing:border-box; padding:8px 10px; border-radius
   </div>
   <div id="factory-reset-modal" class="modal-overlay" style="display:none;">
     <div class="modal-box" id="factory-reset-modal-box"></div>
+  </div>
+
+  <div id="inventory-photo-modal" class="modal-overlay" style="display:none;">
+    <div class="detail-modal-box">
+      <p class="detail-modal-title">📷 Importar inventario desde una foto</p>
+      <p class="detail-modal-subtitle">Beta: la lectura automatica no es perfecta, revisa siempre los numeros antes de aplicar.</p>
+      <div class="detail-modal-body" id="inventory-photo-body">
+        <p style="margin:0 0 10px; font-size:12.5px; color:#3a2f1a;">
+          Haz una foto o sube una captura de tu inventario del juego (cuantas mas cosas se vean claras, mejor:
+          nombre del objeto y su cantidad, uno debajo de otro o en una lista). La app intentara leer los
+          nombres y numeros y te dejara revisarlos y corregirlos antes de guardar nada.
+        </p>
+        <input type="file" id="inventory-photo-input" accept="image/*" capture="environment" style="width:100%; box-sizing:border-box; margin-bottom:10px;">
+        <div id="inventory-photo-progress" style="display:none; margin-bottom:10px;">
+          <div class="priority-panel" style="text-align:center;">
+            <p id="inventory-photo-progress-text" style="margin:0; font-weight:700; color:#7a5218;">Analizando imagen...</p>
+          </div>
+        </div>
+        <div id="inventory-photo-results"></div>
+      </div>
+      <div class="modal-btns" style="margin-top:12px;">
+        <button id="inventory-photo-close" class="mli-btn neutral-cancel">Cerrar</button>
+        <button id="inventory-photo-apply" class="mli-btn confirm-positive" style="display:none;">✅ Aplicar cambios seleccionados</button>
+      </div>
+    </div>
   </div>
   <div id="historico-view" style="display:none;">
     <div class="hist-controls">
@@ -23174,8 +23201,19 @@ function mergeIngredients(list) {
 // Parser flexible de ingredientes: entiende varios formatos a la vez, para poder pegar texto tal
 // cual viene copiado de sitios como Solomonk (ej. "30x Marfil, 25x Piel de Cerdo de Farle, ...",
 // con comas y saltos de linea mezclados), ademas del formato clasico "Recurso;Cantidad" por linea.
+// Reconoce el formato "[Objeto]=25x[Ingrediente A]+20x[Ingrediente B]+..." (tal cual lo copian
+// algunas webs/herramientas de Dofus) y separa el nombre del objeto crafteado del resto de
+// ingredientes. Devuelve null si el texto no tiene ese formato con "[..]=" al principio.
+function parseBracketRecipeLine(text) {
+  const m = cleanName(text).match(/^\s*\[([^\]]+)\]\s*=\s*(.+)$/s);
+  if (!m) return null;
+  return { name: cleanName(m[1]), ingredientsText: m[2] };
+}
+
 function parseIngredientTokens(text) {
-  const joined = cleanName(text).replace(/\n/g, ',');
+  // Admite corchetes decorativos "[Recurso]" (se quitan) y "+" como separador equivalente a la
+  // coma (formato "25x[Ingrediente A]+20x[Ingrediente B]" tal cual lo copian algunas herramientas).
+  const joined = cleanName(text).replace(/[\[\]]/g, '').replace(/\+/g, ',').replace(/\n/g, ',');
   const pieces = joined.split(',').map(s => cleanName(s)).filter(Boolean);
   const result = [];
   pieces.forEach(piece => {
@@ -23196,7 +23234,15 @@ function parseIngredientTokens(text) {
 
 function bulkImportIngredientsToForm() {
   const el = document.getElementById('rec-bulk-ingredients-input');
-  const parsed = parseIngredientTokens(el.value);
+  // Si han pegado el formato "[Objeto]=25x[Ingrediente A]+...", y el nombre de la receta esta
+  // todavia vacio, lo rellenamos solos con lo que hay entre los primeros corchetes.
+  const bracketMatch = parseBracketRecipeLine(el.value);
+  const textToParse = bracketMatch ? bracketMatch.ingredientsText : el.value;
+  if (bracketMatch) {
+    const nameInput = document.getElementById('rec-name');
+    if (nameInput && !nameInput.value.trim()) nameInput.value = bracketMatch.name;
+  }
+  const parsed = parseIngredientTokens(textToParse);
   if (parsed.length === 0) { showToast('No se detecto ningun ingrediente. Prueba con "30x Marfil, 25x Piel..." o "Recurso;Cantidad" por linea.', 'warning'); return; }
   const onlyEmpty = recipeFormIngredients.every(i => !i.resource && !i.qty);
   const combined = onlyEmpty ? parsed : recipeFormIngredients.filter(i => i.resource || i.qty).concat(parsed);
@@ -23427,9 +23473,11 @@ function bulkImportRecipes() {
     return rawName;
   }
   blocks.forEach(lines => {
-    const name = lines[0].replace(/:\s*$/, '').trim();
+    // Formato especial de una sola linea: "[Objeto]=25x[Ingrediente A]+20x[Ingrediente B]+..."
+    const bracketMatch = lines.length === 1 ? parseBracketRecipeLine(lines[0]) : null;
+    const name = bracketMatch ? bracketMatch.name : lines[0].replace(/:\s*$/, '').trim();
     if (!name) return;
-    const rawIngredients = parseIngredientTokens(lines.slice(1).join('\n'));
+    const rawIngredients = parseIngredientTokens(bracketMatch ? bracketMatch.ingredientsText : lines.slice(1).join('\n'));
     rawIngredients.forEach(ing => { ing.resource = resolveOrCreateResource(ing.resource); });
     const ingredients = mergeIngredients(rawIngredients);
     const existing = RECIPES.find(r => r.name.toLowerCase() === name.toLowerCase());
@@ -24531,6 +24579,179 @@ localStorage.setItem = function(key, value) {
     scheduleCloudSync();
   }
 };
+
+// ================= IMPORTAR INVENTARIO DESDE FOTO (lectura automatica, beta) =================
+// Usa Tesseract.js (OCR en el propio navegador) para leer nombres y cantidades de una captura del
+// inventario del juego. La lectura nunca es perfecta con las fuentes/fondos de un juego, asi que
+// siempre se muestra una lista editable para revisar/corregir antes de tocar el stock real.
+function ocrNormalize(str) {
+  return jsStripAccents(String(str || '')).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+    }
+  }
+  return dp[m][n];
+}
+
+// Busca, entre todos los recursos conocidos, el que mas se parezca al texto que ha leido el OCR
+// en esta linea. Devuelve null si ni el mejor candidato se parece lo suficiente, para no rellenar
+// basura si el OCR ha confundido el texto con cualquier otra cosa.
+function bestResourceMatch(rawText) {
+  const norm = ocrNormalize(rawText);
+  if (!norm || norm.length < 3) return null;
+  let best = null;
+  let bestScore = Infinity;
+  RESOURCES.forEach(r => {
+    const rn = ocrNormalize(r.name);
+    if (!rn) return;
+    let dist;
+    if (norm.includes(rn) || rn.includes(norm)) {
+      dist = Math.abs(norm.length - rn.length) * 0.3;
+    } else {
+      dist = levenshtein(norm, rn);
+    }
+    const relative = dist / Math.max(rn.length, 4);
+    if (relative < bestScore) { bestScore = relative; best = r; }
+  });
+  if (!best || bestScore > 0.42) return null;
+  return best;
+}
+
+// Intenta sacar una cantidad de una linea de texto (soporta "x12", "12x", "×12", separadores de
+// miles con punto, y numeros sueltos en la linea). Se queda con el numero mas grande de la linea.
+function extractQuantityFromLine(line) {
+  const cleaned = line.replace(/[×xX]\s*(\d)/g, ' $1').replace(/(\d)\s*[×xX]/g, '$1 ');
+  const matches = cleaned.match(/\d{1,3}(?:[.,]\d{3})+|\d+/g);
+  if (!matches || matches.length === 0) return null;
+  const nums = matches.map(m => parseInt(m.replace(/[.,]/g, ''), 10)).filter(n => !isNaN(n) && n > 0 && n < 1000000);
+  if (nums.length === 0) return null;
+  return Math.max(...nums);
+}
+
+function parseInventoryOcrText(text) {
+  const lines = text.split(/\n+/).map(l => l.trim()).filter(Boolean);
+  const results = [];
+  const usedResourceNames = new Set();
+  lines.forEach(line => {
+    const qty = extractQuantityFromLine(line);
+    const textOnly = line.replace(/[\d.,×xX]+/g, ' ').trim();
+    if (!textOnly || textOnly.length < 3) return;
+    const match = bestResourceMatch(textOnly);
+    if (!match) return;
+    if (usedResourceNames.has(match.name)) return;
+    usedResourceNames.add(match.name);
+    results.push({ resource: match.name, detectedQty: qty !== null ? qty : (have[match.name] || 0), rawLine: line });
+  });
+  return results;
+}
+
+let inventoryPhotoResults = [];
+
+function openInventoryPhotoModal() {
+  inventoryPhotoResults = [];
+  const inputEl = document.getElementById('inventory-photo-input');
+  if (inputEl) inputEl.value = '';
+  document.getElementById('inventory-photo-progress').style.display = 'none';
+  document.getElementById('inventory-photo-results').innerHTML = '';
+  document.getElementById('inventory-photo-apply').style.display = 'none';
+  document.getElementById('inventory-photo-modal').style.display = 'flex';
+}
+function closeInventoryPhotoModal() {
+  document.getElementById('inventory-photo-modal').style.display = 'none';
+}
+
+function renderInventoryPhotoResults() {
+  const el = document.getElementById('inventory-photo-results');
+  if (inventoryPhotoResults.length === 0) {
+    el.innerHTML = '<p style="font-size:12.5px; color:#7a2416; font-weight:700;">No se ha reconocido ningun recurso en la imagen. Prueba con una foto mas nitida, mas de cerca, o con mejor luz.</p>';
+    document.getElementById('inventory-photo-apply').style.display = 'none';
+    return;
+  }
+  el.innerHTML = inventoryPhotoResults.map((row, i) => `
+    <div class="monster-resource-row" style="margin-bottom:8px;">
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <input type="checkbox" class="inv-photo-row-check" data-idx="${i}" ${row.enabled ? 'checked' : ''}>
+        <input type="text" list="resource-options" class="inv-photo-row-name" data-idx="${i}" value="${row.resource}" style="flex:1; min-width:140px; padding:6px 8px; border-radius:6px; border:2px solid #8c7a4a; background:#f5f0dc; color:#2e2418; font-family:'Nunito',sans-serif; font-size:13px;">
+        <input type="number" class="inv-photo-row-qty" data-idx="${i}" value="${row.detectedQty}" style="width:90px; padding:6px 8px; border-radius:6px; border:2px solid #8c7a4a; background:#f5f0dc; color:#2e2418; font-family:'Nunito',sans-serif; font-size:13px;">
+      </div>
+      <p style="margin:4px 0 0; font-size:11px; color:#7a6a45;">Leido: "${row.rawLine}" · antes tenias ${fmt(have[row.resource] || 0)} uds.</p>
+    </div>`).join('');
+  document.getElementById('inventory-photo-apply').style.display = '';
+}
+
+const btnOpenInventoryPhoto = document.getElementById('btn-open-inventory-photo');
+if (btnOpenInventoryPhoto) btnOpenInventoryPhoto.addEventListener('click', openInventoryPhotoModal);
+const inventoryPhotoCloseBtn = document.getElementById('inventory-photo-close');
+if (inventoryPhotoCloseBtn) inventoryPhotoCloseBtn.addEventListener('click', closeInventoryPhotoModal);
+
+const inventoryPhotoInput = document.getElementById('inventory-photo-input');
+if (inventoryPhotoInput) inventoryPhotoInput.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (!window.Tesseract) {
+    showToast('No se pudo cargar el lector de imagenes. Revisa tu conexion e intentalo de nuevo.', 'warning');
+    return;
+  }
+  const progressEl = document.getElementById('inventory-photo-progress');
+  const progressText = document.getElementById('inventory-photo-progress-text');
+  progressEl.style.display = '';
+  document.getElementById('inventory-photo-results').innerHTML = '';
+  document.getElementById('inventory-photo-apply').style.display = 'none';
+  try {
+    const { data } = await Tesseract.recognize(file, 'spa', {
+      logger: m => {
+        if (m.status === 'recognizing text') {
+          progressText.textContent = `Leyendo imagen... ${Math.round((m.progress || 0) * 100)}%`;
+        } else if (m.status) {
+          progressText.textContent = 'Preparando lector...';
+        }
+      }
+    });
+    const parsed = parseInventoryOcrText(data.text || '');
+    inventoryPhotoResults = parsed.map(r => ({ ...r, enabled: true }));
+    progressEl.style.display = 'none';
+    renderInventoryPhotoResults();
+  } catch (err) {
+    console.error(err);
+    progressEl.style.display = 'none';
+    showToast('No se pudo analizar la imagen. Prueba con otra foto.', 'warning');
+  }
+});
+
+const inventoryPhotoResultsEl = document.getElementById('inventory-photo-results');
+if (inventoryPhotoResultsEl) inventoryPhotoResultsEl.addEventListener('change', (e) => {
+  const idx = e.target.dataset.idx;
+  if (idx === undefined) return;
+  const i = parseInt(idx, 10);
+  if (e.target.classList.contains('inv-photo-row-check')) inventoryPhotoResults[i].enabled = e.target.checked;
+  if (e.target.classList.contains('inv-photo-row-name')) inventoryPhotoResults[i].resource = e.target.value;
+  if (e.target.classList.contains('inv-photo-row-qty')) inventoryPhotoResults[i].detectedQty = parseInt(e.target.value, 10) || 0;
+});
+
+const inventoryPhotoApplyBtn = document.getElementById('inventory-photo-apply');
+if (inventoryPhotoApplyBtn) inventoryPhotoApplyBtn.addEventListener('click', () => {
+  const toApply = inventoryPhotoResults.filter(r => r.enabled && r.resource && RESOURCE_MAP[r.resource]);
+  if (toApply.length === 0) { showToast('No hay ninguna fila marcada con un recurso valido.', 'warning'); return; }
+  showConfirm(`¿Aplicar ${toApply.length} cambio(s) de stock detectados en la foto? Esto sustituira la cantidad "Tengo" de esos recursos (el resto de tu stock no se toca).`, () => {
+    toApply.forEach(r => { have[r.resource] = r.detectedQty; });
+    saveHave();
+    render();
+    closeInventoryPhotoModal();
+    showToast(`✅ Stock actualizado para ${toApply.length} recurso(s).`, 'success');
+  }, 'Si, aplicar');
+});
 
 </script>
 </body>
