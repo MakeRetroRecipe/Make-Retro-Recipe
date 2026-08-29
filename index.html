@@ -20358,7 +20358,9 @@ function repairMojibakeNames() {
   monsters.forEach(m => { m.name = track(m.name); });
   zones.forEach(z => {
     z.name = track(z.name);
-    z.monsterNames = (z.monsterNames || []).map(n => cleanName(n));
+    // Quita nombres duplicados (ej. el mismo monstruo asignado 2 veces por error en algun momento),
+    // para que el contador "X monstruo(s)" de Zonas de farmeo no cuente de mas.
+    z.monsterNames = Array.from(new Set((z.monsterNames || []).map(n => cleanName(n))));
   });
 
   Object.values(resourceOverrides).forEach(ov => { (ov.monsters || []).forEach(mm => { mm.monster = cleanName(mm.monster); }); });
@@ -22188,7 +22190,9 @@ function renderZonas() {
   }
 
   el.innerHTML = filteredZones.map(z => {
-    const zMonsters = (z.monsterNames || []).map(n => findMonster(n)).filter(Boolean);
+    const seenMonsterNames = new Set();
+    const zMonsters = (z.monsterNames || []).map(n => findMonster(n)).filter(Boolean)
+      .filter(m => { if (seenMonsterNames.has(m.name)) return false; seenMonsterNames.add(m.name); return true; });
     const monstersHtml = zMonsters.length === 0
       ? '<div class="empty-manage-note">Sin monstruos asignados todavia.</div>'
       : zMonsters.map(m => {
