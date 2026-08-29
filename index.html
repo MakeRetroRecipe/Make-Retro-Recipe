@@ -22304,7 +22304,7 @@ function renderMonstruos() {
         return;
       }
       (r.recipeList || []).forEach(item => recipeNames.add(item.name));
-      if ((have[r.name] || 0) < (r.needed || 0)) missingCount++;
+      if (((have[r.name] || 0) + (r.convertBonus || 0)) < (r.needed || 0)) missingCount++;
     });
     monsterMetrics[m.name] = { resourceCount: entries.length, recipeCount: recipeNames.size, missingCount, craftedDropCount };
   });
