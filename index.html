@@ -20358,9 +20358,20 @@ function repairMojibakeNames() {
   monsters.forEach(m => { m.name = track(m.name); });
   zones.forEach(z => {
     z.name = track(z.name);
-    // Quita nombres duplicados (ej. el mismo monstruo asignado 2 veces por error en algun momento),
-    // para que el contador "X monstruo(s)" de Zonas de farmeo no cuente de mas.
-    z.monsterNames = Array.from(new Set((z.monsterNames || []).map(n => cleanName(n))));
+    // Quita nombres duplicados o con diferente mayus/minus que en realidad apuntan al mismo
+    // monstruo (ej. el mismo monstruo guardado 2 veces por error en algun momento), para que el
+    // contador "X monstruo(s)" no cuente de mas ni en Zonas de farmeo ni en Gestionar > Zonas.
+    const seenMonsterKeys = new Set();
+    z.monsterNames = (z.monsterNames || []).map(n => {
+      const cleaned = cleanName(n);
+      const canonical = monsters.find(m => m.name.toLowerCase() === cleaned.toLowerCase());
+      return canonical ? canonical.name : cleaned;
+    }).filter(n => {
+      const key = n.toLowerCase();
+      if (seenMonsterKeys.has(key)) return false;
+      seenMonsterKeys.add(key);
+      return true;
+    });
   });
 
   Object.values(resourceOverrides).forEach(ov => { (ov.monsters || []).forEach(mm => { mm.monster = cleanName(mm.monster); }); });
@@ -23695,7 +23706,7 @@ function renderManageZoneList() {
   el.innerHTML = zones.map(z => `
     <div class="manage-list-item">
       <div class="mli-tags-corner">
-        <span class="mli-tag">${(z.monsterNames || []).length} monstruo(s)</span>
+        <span class="mli-tag">${new Set((z.monsterNames || []).map(n => findMonster(n)).filter(Boolean).map(m => m.name)).size} monstruo(s)</span>
       </div>
       <div class="mli-main">
         <span class="color-swatch" style="background:${z.color || '#ded4a8'};" title="Color asignado"></span>
