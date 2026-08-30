@@ -24800,7 +24800,11 @@ if (inventoryPhotoInput) inventoryPhotoInput.addEventListener('change', async (e
   } catch (err) {
     console.error(err);
     progressEl.style.display = 'none';
-    showToast('No se pudo analizar la imagen. Prueba con otra foto.', 'warning');
+    const msg = (err && (err.message || err.toString())) || 'error desconocido';
+    document.getElementById('inventory-photo-results').innerHTML =
+      `<p style="font-size:12.5px; color:#7a2416; font-weight:700;">No se pudo analizar la imagen.</p>
+       <p style="font-size:11px; color:#5a4d2e; margin-top:6px;"><b>Detalle del error (para depurar):</b><br>${String(msg).replace(/</g, '&lt;')}</p>`;
+    showToast('No se pudo analizar la imagen. Mira el detalle del error debajo.', 'warning');
   }
 });
 
@@ -25007,7 +25011,11 @@ if (resourceDropPhotoInput) resourceDropPhotoInput.addEventListener('change', as
   } catch (err) {
     console.error(err);
     progressEl.style.display = 'none';
-    showToast('No se pudo analizar la imagen. Prueba con otra foto.', 'warning');
+    const msg = (err && (err.message || err.toString())) || 'error desconocido';
+    document.getElementById('resource-drop-photo-results').innerHTML =
+      `<p style="font-size:12.5px; color:#7a2416; font-weight:700;">No se pudo analizar la imagen.</p>
+       <p style="font-size:11px; color:#5a4d2e; margin-top:6px;"><b>Detalle del error (para depurar):</b><br>${String(msg).replace(/</g, '&lt;')}</p>`;
+    showToast('No se pudo analizar la imagen. Mira el detalle del error debajo.', 'warning');
   }
 });
 
