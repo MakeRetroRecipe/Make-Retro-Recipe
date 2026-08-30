@@ -772,6 +772,36 @@ h1 {
 .deficit-total { margin-top: 8px; padding-top: 6px; border-top: 1px dashed #a8996b; font-size: 12.5px; font-weight: 700; color: #7a2416; }
 
 
+.frame-titlebar { position: relative; }
+.menu-toggle-btn {
+  position: absolute; top: 12px; right: 14px; background: rgba(255,255,255,0.08);
+  border: 2px solid #8c7a4a; color: #f5efd8; font-size: 20px; line-height: 1;
+  width: 40px; height: 40px; border-radius: 8px; cursor: pointer; z-index: 5;
+}
+.menu-toggle-btn:hover { background: rgba(255,255,255,0.16); }
+
+.app-menu-overlay {
+  display: none; position: fixed; inset: 0; background: rgba(20,16,8,0.55); z-index: 600;
+}
+.app-menu-overlay.open { display: block; }
+.app-menu-panel {
+  position: fixed; top: 0; left: 0; right: 0; max-height: 92vh; overflow-y: auto;
+  background: #c9c093; border-bottom: 3px solid #2e2a1c; box-shadow: 0 10px 24px rgba(0,0,0,0.5);
+  padding: 16px 16px 20px; z-index: 601;
+  background-image: repeating-linear-gradient(45deg, rgba(140,122,74,0.10) 0px, rgba(140,122,74,0.10) 2px, transparent 2px, transparent 6px);
+}
+.app-menu-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.app-menu-head h2 { margin: 0; font-family: 'Baloo 2', sans-serif; font-size: 18px; color: #3a2f1a; }
+.app-menu-close-btn {
+  background: #cfc7ae; border: 2px solid #7a6d4a; color: #3a2f1a; border-radius: 8px;
+  width: 36px; height: 36px; font-size: 16px; cursor: pointer; flex-shrink: 0;
+}
+.app-menu-section-title {
+  font-family: 'Baloo 2', sans-serif; font-size: 13.5px; color: #7a5218; margin: 16px 0 6px;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.app-menu-section-title:first-of-type { margin-top: 4px; }
+
 .backup-bar { display: flex; justify-content: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 .account-bar {
   margin: 16px 14px 0; padding: 12px 14px; border-radius: 10px;
@@ -804,8 +834,50 @@ footer { text-align: center; font-size: 11.5px; color: #6b5d3f; margin-top: 14px
     <button class="tab-btn" id="ftab-historico">📈 Historico</button>
   </div>
 </div>
+<div class="app-menu-overlay" id="app-menu-overlay">
+  <div class="app-menu-panel" id="app-menu-panel">
+    <div class="app-menu-head">
+      <h2>☰ Menu</h2>
+      <button type="button" class="app-menu-close-btn" id="app-menu-close-btn">✕</button>
+    </div>
+
+    <div class="app-menu-section-title">☁️ Cuenta y sincronizacion</div>
+    <div class="account-bar" id="account-bar">
+      <div class="account-bar-head">
+        <span class="account-icon">☁️</span>
+        <span id="account-status-text">Sin iniciar sesion — tu progreso solo se guarda en este dispositivo.</span>
+      </div>
+      <div id="account-logged-out" class="account-form">
+        <input type="email" id="account-email" placeholder="Email" autocomplete="email">
+        <input type="password" id="account-password" placeholder="Contraseña (min. 6 caracteres)" autocomplete="current-password">
+        <div class="account-btn-row">
+          <button type="button" class="mli-btn primary-btn" id="account-login-btn">Iniciar sesion</button>
+          <button type="button" class="mli-btn" id="account-signup-btn">Crear cuenta</button>
+        </div>
+        <p class="field-hint" style="margin-top:6px;">Al iniciar sesion (o crear cuenta) por primera vez, tu progreso actual de este dispositivo se sube a la nube. Si ya tenias progreso guardado en la nube desde otro dispositivo, se combinara con el de aqui.</p>
+      </div>
+      <div id="account-logged-in" class="account-form" style="display:none;">
+        <p style="margin:0 0 8px;">Sesion iniciada como <b id="account-email-display"></b></p>
+        <div class="account-btn-row">
+          <button type="button" class="mli-btn primary-btn" id="account-sync-now-btn">☁️ Sincronizar ahora</button>
+          <button type="button" class="mli-btn danger" id="account-logout-btn">Cerrar sesion</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="app-menu-section-title">💾 Copia de seguridad</div>
+    <div class="backup-bar">
+      <button class="backup-btn" id="btn-export">💾 Exportar mi progreso</button>
+      <label class="backup-btn" for="import-file" style="display:inline-block;">📂 Importar progreso</label>
+      <input type="file" id="import-file" accept="application/json,.json" style="position:absolute; width:1px; height:1px; opacity:0; overflow:hidden;">
+      <button class="backup-btn" id="btn-open-inventory-photo">📷 Importar inventario desde foto (beta)</button>
+    </div>
+    <p class="field-hint" style="margin-top:8px;">Tu progreso ya viene guardado dentro de este mismo archivo. Los cambios que sigas haciendo se guardan ademas solos en este navegador (localStorage); usa "Exportar" cuando quieras pasarlos a otro dispositivo o pedirme que los deje sellados aqui de nuevo.</p>
+  </div>
+</div>
 <div class="frame">
   <div class="frame-titlebar">
+    <button type="button" class="menu-toggle-btn" id="menu-toggle-btn" title="Menu">☰</button>
     <header>
       <h1>📜 Inventario de Crafteo</h1>
       <p class="subtitle">Runas Ga Pa / Ga Pm · lo que necesitas vs. lo que llevas</p>
@@ -1328,36 +1400,7 @@ Oro;3" style="width:100%; box-sizing:border-box; padding:8px 10px; border-radius
 
   <datalist id="resource-options"></datalist>
 
-  <div class="account-bar" id="account-bar">
-    <div class="account-bar-head">
-      <span class="account-icon">☁️</span>
-      <span id="account-status-text">Sin iniciar sesion — tu progreso solo se guarda en este dispositivo.</span>
-    </div>
-    <div id="account-logged-out" class="account-form">
-      <input type="email" id="account-email" placeholder="Email" autocomplete="email">
-      <input type="password" id="account-password" placeholder="Contraseña (min. 6 caracteres)" autocomplete="current-password">
-      <div class="account-btn-row">
-        <button type="button" class="mli-btn primary-btn" id="account-login-btn">Iniciar sesion</button>
-        <button type="button" class="mli-btn" id="account-signup-btn">Crear cuenta</button>
-      </div>
-      <p class="field-hint" style="margin-top:6px;">Al iniciar sesion (o crear cuenta) por primera vez, tu progreso actual de este dispositivo se sube a la nube. Si ya tenias progreso guardado en la nube desde otro dispositivo, se combinara con el de aqui.</p>
-    </div>
-    <div id="account-logged-in" class="account-form" style="display:none;">
-      <p style="margin:0 0 8px;">Sesion iniciada como <b id="account-email-display"></b></p>
-      <div class="account-btn-row">
-        <button type="button" class="mli-btn primary-btn" id="account-sync-now-btn">☁️ Sincronizar ahora</button>
-        <button type="button" class="mli-btn danger" id="account-logout-btn">Cerrar sesion</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="backup-bar">
-    <button class="backup-btn" id="btn-export">💾 Exportar mi progreso</button>
-    <label class="backup-btn" for="import-file" style="display:inline-block;">📂 Importar progreso</label>
-    <input type="file" id="import-file" accept="application/json,.json" style="position:absolute; width:1px; height:1px; opacity:0; overflow:hidden;">
-    <button class="backup-btn" id="btn-open-inventory-photo">📷 Importar inventario desde foto (beta)</button>
-  </div>
-  <footer>Tu progreso ya viene guardado dentro de este mismo archivo. Los cambios que sigas haciendo se guardan ademas solos en este navegador (localStorage); usa "Exportar" cuando quieras pasarlos a otro dispositivo o pedirme que los deje sellados aqui de nuevo.</footer>
+  <p class="field-hint" style="text-align:center; margin-top:14px;">💡 El acceso a tu cuenta, la copia de seguridad y la importacion de inventario por foto estan ahora en el menu ☰ de arriba, siempre disponibles en cualquier pestaña.</p>
   </div>
 
   <div id="toast-container" class="toast-container"></div>
@@ -24751,6 +24794,24 @@ if (inventoryPhotoApplyBtn) inventoryPhotoApplyBtn.addEventListener('click', () 
     closeInventoryPhotoModal();
     showToast(`✅ Stock actualizado para ${toApply.length} recurso(s).`, 'success');
   }, 'Si, aplicar');
+});
+
+// ================= MENU SUPERIOR (cuenta, copia de seguridad, importar foto) =================
+function openAppMenu() {
+  const overlay = document.getElementById('app-menu-overlay');
+  if (overlay) overlay.classList.add('open');
+}
+function closeAppMenu() {
+  const overlay = document.getElementById('app-menu-overlay');
+  if (overlay) overlay.classList.remove('open');
+}
+const menuToggleBtn = document.getElementById('menu-toggle-btn');
+if (menuToggleBtn) menuToggleBtn.addEventListener('click', openAppMenu);
+const appMenuCloseBtn = document.getElementById('app-menu-close-btn');
+if (appMenuCloseBtn) appMenuCloseBtn.addEventListener('click', closeAppMenu);
+const appMenuOverlay = document.getElementById('app-menu-overlay');
+if (appMenuOverlay) appMenuOverlay.addEventListener('click', (e) => {
+  if (e.target === appMenuOverlay) closeAppMenu();
 });
 
 </script>
