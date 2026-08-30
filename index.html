@@ -1162,7 +1162,8 @@ Zafiro;Mineros" style="width:100%; box-sizing:border-box; padding:8px 10px; bord
 
         <div id="res-dropdata-block">
           <p class="field-hint" id="res-monsters-summary" style="margin-top:-4px;">👹 Sin monstruo asignado todavia.</p>
-          <p class="field-hint" style="margin-top:-4px;">Para asignarle (o quitarle) monstruos, con su propio PP Lock / % base / cantidad dropeable cada uno, ve a "👹 Monstruos" mas abajo, edita el monstruo, y marca este recurso en su lista de "Recursos que dropea".</p>
+          <p class="field-hint" style="margin-top:-4px;">Para asignarle (o quitarle) monstruos a mano, con su propio PP Lock / % base / cantidad dropeable cada uno, ve a "👹 Monstruos" mas abajo, edita el monstruo, y marca este recurso en su lista de "Recursos que dropea". O, mas rapido, importa una foto de la tabla de drops de este recurso aqui abajo:</p>
+          <button type="button" class="reset-order-btn" id="btn-open-drop-photo">📷 Leer tabla de drops desde una foto (beta)</button>
         </div>
 
         <label class="checkbox-row" style="margin-top:6px;"><input type="checkbox" id="res-converts"> 🔄 ¿Este recurso se convierte en otro (ej. en un taller/forjamagia)?</label>
@@ -1399,6 +1400,34 @@ Oro;3" style="width:100%; box-sizing:border-box; padding:8px 10px; border-radius
   </div>
 
   <datalist id="resource-options"></datalist>
+  <datalist id="monster-options"></datalist>
+
+  <div id="resource-drop-photo-modal" class="modal-overlay" style="display:none;">
+    <div class="detail-modal-box">
+      <p class="detail-modal-title">📷 Leer tabla de drops desde una foto</p>
+      <p class="detail-modal-subtitle">Beta: la lectura automatica no es perfecta, revisa siempre los datos antes de aplicar — sobre todo el PP Lock, que la app no puede contar solo (son iconos, no texto).</p>
+      <div class="detail-modal-body" id="resource-drop-photo-body">
+        <p style="margin:0 0 10px; font-size:12.5px; color:#3a2f1a;">
+          Sube una captura de la tabla de drops de este recurso (por ejemplo de Solomonk: nombre del
+          recurso arriba y debajo la lista "Monstruo (X% – Y% 🧍🧍🧍)" con el numerito de cantidad
+          dropeable por combate al lado del nombre). La app intentara sacar el monstruo, el rango de %,
+          y la cantidad dropeable de cada uno — el PP Lock (numero de muñecos) hay que revisarlo y
+          ponerlo a mano en cada fila, contando los iconos de la foto, porque eso no se puede leer como texto.
+        </p>
+        <input type="file" id="resource-drop-photo-input" accept="image/*" capture="environment" style="width:100%; box-sizing:border-box; margin-bottom:10px;">
+        <div id="resource-drop-photo-progress" style="display:none; margin-bottom:10px;">
+          <div class="priority-panel" style="text-align:center;">
+            <p id="resource-drop-photo-progress-text" style="margin:0; font-weight:700; color:#7a5218;">Analizando imagen...</p>
+          </div>
+        </div>
+        <div id="resource-drop-photo-results"></div>
+      </div>
+      <div class="modal-btns" style="margin-top:12px;">
+        <button id="resource-drop-photo-close" class="mli-btn neutral-cancel">Cerrar</button>
+        <button id="resource-drop-photo-apply" class="mli-btn confirm-positive" style="display:none;">✅ Aplicar filas seleccionadas</button>
+      </div>
+    </div>
+  </div>
 
   <p class="field-hint" style="text-align:center; margin-top:14px;">💡 El acceso a tu cuenta, la copia de seguridad y la importacion de inventario por foto estan ahora en el menu ☰ de arriba, siempre disponibles en cualquier pestaña.</p>
   </div>
@@ -23176,6 +23205,8 @@ function refreshResourceDatalist() {
   const dl = document.getElementById('resource-options');
   if (!dl) return;
   dl.innerHTML = RESOURCES.map(r => `<option value="${r.name}"></option>`).join('');
+  const mdl = document.getElementById('monster-options');
+  if (mdl) mdl.innerHTML = monsters.map(m => `<option value="${m.name}"></option>`).join('');
 }
 
 // Busca si un nombre de recurso ya existe, sin importar mayusculas/minusculas o espacios de mas,
@@ -24812,6 +24843,208 @@ if (appMenuCloseBtn) appMenuCloseBtn.addEventListener('click', closeAppMenu);
 const appMenuOverlay = document.getElementById('app-menu-overlay');
 if (appMenuOverlay) appMenuOverlay.addEventListener('click', (e) => {
   if (e.target === appMenuOverlay) closeAppMenu();
+});
+
+// ================= LEER TABLA DE DROPS DE UN RECURSO DESDE FOTO (OCR, beta) =================
+// Formato tipico (ej. paginas como Solomonk): "NombreMonstruo<qty> (X% – Y% <iconos de PP Lock>),
+// OtroMonstruo<qty> (X% <iconos>), ..." — un monstruo tras otro separados por comas. El PP Lock (el
+// numero de "muñequitos") no se puede leer como texto de forma fiable, asi que esa columna se deja
+// siempre para revisar/rellenar a mano; el resto (monstruo, % base, % maximo, cantidad dropeable
+// por combate) se intenta sacar solo.
+function bestMonsterMatch(rawText) {
+  const norm = ocrNormalize(rawText);
+  if (!norm || norm.length < 3) return null;
+  let best = null;
+  let bestScore = Infinity;
+  monsters.forEach(m => {
+    const mn = ocrNormalize(m.name);
+    if (!mn) return;
+    let dist;
+    if (norm.includes(mn) || mn.includes(norm)) {
+      dist = Math.abs(norm.length - mn.length) * 0.3;
+    } else {
+      dist = levenshtein(norm, mn);
+    }
+    const relative = dist / Math.max(mn.length, 4);
+    if (relative < bestScore) { bestScore = relative; best = m; }
+  });
+  if (!best || bestScore > 0.42) return null;
+  return best;
+}
+
+function parseDropTableOcrText(text) {
+  const flat = text.replace(/\n+/g, ', ');
+  const regex = /([A-Za-zÀ-ÿ''\- ]{3,60}?)\s*(\d{1,2}|∞|00)?\s*\(\s*(\d{1,3}(?:[.,]\d+)?)\s*%(?:\s*[–—\-]\s*(\d{1,3}(?:[.,]\d+)?)\s*%)?/g;
+  const results = [];
+  const usedMonsterNames = new Set();
+  let m;
+  while ((m = regex.exec(flat)) !== null) {
+    const rawName = m[1].replace(/^[,)\s]+/, '').trim();
+    const qtyRaw = m[2];
+    const pctMin = parseFloat(String(m[3]).replace(',', '.'));
+    const pctMax = m[4] != null ? parseFloat(String(m[4]).replace(',', '.')) : null;
+    if (!rawName || rawName.length < 3) continue;
+    const match = bestMonsterMatch(rawName);
+    const monsterName = match ? match.name : cleanName(rawName);
+    if (usedMonsterNames.has(monsterName)) continue;
+    usedMonsterNames.add(monsterName);
+    let dropQtyMode = '', dropQtyPerMonster = null;
+    if (qtyRaw === '∞' || qtyRaw === '00') { dropQtyMode = ''; dropQtyPerMonster = null; }
+    else if (qtyRaw) { dropQtyMode = ''; dropQtyPerMonster = parseInt(qtyRaw, 10) || null; }
+    results.push({
+      monster: monsterName, monsterMatched: !!match,
+      ppLock: null, baseDropRate: pctMin, baseDropRateMax: pctMax,
+      dropQtyMode, dropQtyPerMonster,
+      rawLine: m[0].trim()
+    });
+  }
+  return results;
+}
+
+// Escribe (o actualiza) la entrada de un monstruo dentro de r.monsters para el recurso que se esta
+// editando ahora mismo en el formulario, con el mismo helper de auto-dropMode que usa el resto de
+// la app, y lo persiste en el sitio correcto (resourceOverrides si es un recurso de fabrica, o
+// customResources si es tuyo).
+function setResourceMonsterEntry(resourceName, entry) {
+  const r = RESOURCE_MAP[resourceName];
+  if (!r) return false;
+  const list = (r.monsters || []).slice();
+  const idx = list.findIndex(mm => mm.monster === entry.monster);
+  const { dropMode, dropReason } = computeAutoDropMode(entry.ppLock, entry.baseDropRate, entry.baseDropRateMax, entry.dropQtyMode, entry.dropQtyPerMonster);
+  const finalEntry = {
+    monster: entry.monster, ppLock: entry.ppLock, baseDropRate: entry.baseDropRate, baseDropRateMax: entry.baseDropRateMax,
+    dropQtyMode: entry.dropQtyMode, dropQtyPerMonster: entry.dropQtyPerMonster, dropMode, dropReason
+  };
+  if (idx >= 0) list[idx] = finalEntry; else list.push(finalEntry);
+  const isBase = BASE_RESOURCES.some(b => b.name === resourceName);
+  if (isBase) { resourceOverrides[resourceName] = { ...(resourceOverrides[resourceName] || {}), monsters: list }; saveResourceOverrides(); }
+  else { const c = customResources.find(x => x.name === resourceName); if (c) { c.monsters = list; saveCustomResources(); } }
+  return true;
+}
+
+let resourceDropPhotoResults = [];
+
+function openResourceDropPhotoModal() {
+  if (!editingResourceName) {
+    showToast('Primero guarda este recurso (aunque sea sin datos de drop) para poder importarle la tabla de drops desde una foto.', 'warning');
+    return;
+  }
+  resourceDropPhotoResults = [];
+  const inputEl = document.getElementById('resource-drop-photo-input');
+  if (inputEl) inputEl.value = '';
+  document.getElementById('resource-drop-photo-progress').style.display = 'none';
+  document.getElementById('resource-drop-photo-results').innerHTML = '';
+  document.getElementById('resource-drop-photo-apply').style.display = 'none';
+  document.getElementById('resource-drop-photo-modal').style.display = 'flex';
+}
+function closeResourceDropPhotoModal() {
+  document.getElementById('resource-drop-photo-modal').style.display = 'none';
+}
+
+function renderResourceDropPhotoResults() {
+  const el = document.getElementById('resource-drop-photo-results');
+  if (resourceDropPhotoResults.length === 0) {
+    el.innerHTML = '<p style="font-size:12.5px; color:#7a2416; font-weight:700;">No se ha reconocido ningun monstruo en la imagen. Prueba con una foto mas nitida o mas de cerca.</p>';
+    document.getElementById('resource-drop-photo-apply').style.display = 'none';
+    return;
+  }
+  el.innerHTML = resourceDropPhotoResults.map((row, i) => `
+    <div class="monster-resource-row" style="margin-bottom:8px;">
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:6px;">
+        <input type="checkbox" class="drop-photo-row-check" data-idx="${i}" ${row.enabled ? 'checked' : ''}>
+        <input type="text" list="monster-options" class="drop-photo-row-monster" data-idx="${i}" value="${row.monster}" style="flex:1; min-width:140px; padding:6px 8px; border-radius:6px; border:2px solid ${row.monsterMatched ? '#8c7a4a' : '#b5432c'}; background:#f5f0dc; color:#2e2418; font-family:'Nunito',sans-serif; font-size:13px;">
+      </div>
+      ${!row.monsterMatched ? '<p style="margin:0 0 6px; font-size:11px; color:#7a2416; font-weight:700;">⚠️ No existe todavia este monstruo — se creara nuevo al aplicar. Revisa que el nombre este bien escrito.</p>' : ''}
+      <div style="display:flex; gap:6px; flex-wrap:wrap;">
+        <label style="font-size:11px; color:#3a2f1a;">PP Lock<br><input type="number" min="0" class="drop-photo-row-pplock" data-idx="${i}" value="${row.ppLock != null ? row.ppLock : ''}" placeholder="cuenta los muñecos" style="width:110px; padding:6px 8px; border-radius:6px; border:2px solid #8c7a4a; background:#f5f0dc; color:#2e2418; font-size:13px;"></label>
+        <label style="font-size:11px; color:#3a2f1a;">% base<br><input type="number" min="0" step="0.01" class="drop-photo-row-pctmin" data-idx="${i}" value="${row.baseDropRate != null ? row.baseDropRate : ''}" style="width:80px; padding:6px 8px; border-radius:6px; border:2px solid #8c7a4a; background:#f5f0dc; color:#2e2418; font-size:13px;"></label>
+        <label style="font-size:11px; color:#3a2f1a;">% maximo<br><input type="number" min="0" step="0.01" class="drop-photo-row-pctmax" data-idx="${i}" value="${row.baseDropRateMax != null ? row.baseDropRateMax : ''}" style="width:80px; padding:6px 8px; border-radius:6px; border:2px solid #8c7a4a; background:#f5f0dc; color:#2e2418; font-size:13px;"></label>
+        <label style="font-size:11px; color:#3a2f1a;">Cant./combate<br><input type="number" min="0" class="drop-photo-row-qty" data-idx="${i}" value="${row.dropQtyPerMonster != null ? row.dropQtyPerMonster : ''}" placeholder="vacio = sin limite" style="width:110px; padding:6px 8px; border-radius:6px; border:2px solid #8c7a4a; background:#f5f0dc; color:#2e2418; font-size:13px;"></label>
+      </div>
+      <p style="margin:4px 0 0; font-size:11px; color:#7a6a45;">Leido: "${row.rawLine}"</p>
+    </div>`).join('');
+  document.getElementById('resource-drop-photo-apply').style.display = '';
+}
+
+const btnOpenDropPhoto = document.getElementById('btn-open-drop-photo');
+if (btnOpenDropPhoto) btnOpenDropPhoto.addEventListener('click', openResourceDropPhotoModal);
+const resourceDropPhotoCloseBtn = document.getElementById('resource-drop-photo-close');
+if (resourceDropPhotoCloseBtn) resourceDropPhotoCloseBtn.addEventListener('click', closeResourceDropPhotoModal);
+
+const resourceDropPhotoInput = document.getElementById('resource-drop-photo-input');
+if (resourceDropPhotoInput) resourceDropPhotoInput.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (!window.Tesseract) {
+    showToast('No se pudo cargar el lector de imagenes. Revisa tu conexion e intentalo de nuevo.', 'warning');
+    return;
+  }
+  const progressEl = document.getElementById('resource-drop-photo-progress');
+  const progressText = document.getElementById('resource-drop-photo-progress-text');
+  progressEl.style.display = '';
+  document.getElementById('resource-drop-photo-results').innerHTML = '';
+  document.getElementById('resource-drop-photo-apply').style.display = 'none';
+  try {
+    const { data } = await Tesseract.recognize(file, 'spa', {
+      logger: m => {
+        if (m.status === 'recognizing text') {
+          progressText.textContent = `Leyendo imagen... ${Math.round((m.progress || 0) * 100)}%`;
+        } else if (m.status) {
+          progressText.textContent = 'Preparando lector...';
+        }
+      }
+    });
+    const parsed = parseDropTableOcrText(data.text || '');
+    resourceDropPhotoResults = parsed.map(r => ({ ...r, enabled: true }));
+    progressEl.style.display = 'none';
+    renderResourceDropPhotoResults();
+  } catch (err) {
+    console.error(err);
+    progressEl.style.display = 'none';
+    showToast('No se pudo analizar la imagen. Prueba con otra foto.', 'warning');
+  }
+});
+
+const resourceDropPhotoResultsEl = document.getElementById('resource-drop-photo-results');
+if (resourceDropPhotoResultsEl) resourceDropPhotoResultsEl.addEventListener('change', (e) => {
+  const idx = e.target.dataset.idx;
+  if (idx === undefined) return;
+  const i = parseInt(idx, 10);
+  const row = resourceDropPhotoResults[i];
+  if (!row) return;
+  if (e.target.classList.contains('drop-photo-row-check')) row.enabled = e.target.checked;
+  if (e.target.classList.contains('drop-photo-row-monster')) {
+    row.monster = e.target.value;
+    row.monsterMatched = !!findMonster(row.monster);
+  }
+  if (e.target.classList.contains('drop-photo-row-pplock')) row.ppLock = e.target.value === '' ? null : (parseInt(e.target.value, 10) || 0);
+  if (e.target.classList.contains('drop-photo-row-pctmin')) row.baseDropRate = e.target.value === '' ? null : parseFloat(e.target.value);
+  if (e.target.classList.contains('drop-photo-row-pctmax')) row.baseDropRateMax = e.target.value === '' ? null : parseFloat(e.target.value);
+  if (e.target.classList.contains('drop-photo-row-qty')) row.dropQtyPerMonster = e.target.value === '' ? null : (parseInt(e.target.value, 10) || null);
+});
+
+const resourceDropPhotoApplyBtn = document.getElementById('resource-drop-photo-apply');
+if (resourceDropPhotoApplyBtn) resourceDropPhotoApplyBtn.addEventListener('click', () => {
+  if (!editingResourceName) { closeResourceDropPhotoModal(); return; }
+  const toApply = resourceDropPhotoResults.filter(r => r.enabled && r.monster);
+  if (toApply.length === 0) { showToast('No hay ninguna fila marcada.', 'warning'); return; }
+  showConfirm(`¿Aplicar ${toApply.length} monstruo(s) detectado(s) a este recurso? Los que no existan se crearan nuevos.`, () => {
+    toApply.forEach(row => {
+      if (!row.monsterMatched && !findMonster(row.monster)) {
+        upsertMonster({ name: row.monster, color: '#e0d29c' });
+      }
+      setResourceMonsterEntry(editingResourceName, {
+        monster: row.monster, ppLock: row.ppLock, baseDropRate: row.baseDropRate,
+        baseDropRateMax: row.baseDropRateMax, dropQtyMode: row.dropQtyMode, dropQtyPerMonster: row.dropQtyPerMonster
+      });
+    });
+    buildWorkingData();
+    const r = RESOURCE_MAP[editingResourceName];
+    renderResMonstersSummary((r && r.monsters) || []);
+    render();
+    closeResourceDropPhotoModal();
+    showToast(`✅ ${toApply.length} monstruo(s) aplicado(s) a "${editingResourceName}". Revisa el PP Lock de cada uno si no lo has rellenado.`, 'success');
+  }, 'Si, aplicar');
 });
 
 </script>
