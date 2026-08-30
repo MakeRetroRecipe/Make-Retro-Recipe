@@ -24658,6 +24658,30 @@ localStorage.setItem = function(key, value) {
 // Usa Tesseract.js (OCR en el propio navegador) para leer nombres y cantidades de una captura del
 // inventario del juego. La lectura nunca es perfecta con las fuentes/fondos de un juego, asi que
 // siempre se muestra una lista editable para revisar/corregir antes de tocar el stock real.
+// Algunos moviles/navegadores fallan al pasarle el File directamente al lector de imagenes
+// ("File could not be read! Code=0"), sobre todo con fotos que vienen de la galeria/camara con
+// formatos o metadatos raros. Convertirla primero a un <canvas> evita ese problema casi siempre.
+function fileToCanvas(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('No se pudo leer el archivo de imagen.'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('No se pudo cargar la imagen (formato no soportado).'));
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas);
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 function ocrNormalize(str) {
   return jsStripAccents(String(str || '')).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
@@ -24784,7 +24808,8 @@ if (inventoryPhotoInput) inventoryPhotoInput.addEventListener('change', async (e
   document.getElementById('inventory-photo-results').innerHTML = '';
   document.getElementById('inventory-photo-apply').style.display = 'none';
   try {
-    const { data } = await Tesseract.recognize(file, 'spa', {
+    const canvas = await fileToCanvas(file);
+    const { data } = await Tesseract.recognize(canvas, 'spa', {
       logger: m => {
         if (m.status === 'recognizing text') {
           progressText.textContent = `Leyendo imagen... ${Math.round((m.progress || 0) * 100)}%`;
@@ -24994,7 +25019,8 @@ if (resourceDropPhotoInput) resourceDropPhotoInput.addEventListener('change', as
   document.getElementById('resource-drop-photo-results').innerHTML = '';
   document.getElementById('resource-drop-photo-apply').style.display = 'none';
   try {
-    const { data } = await Tesseract.recognize(file, 'spa', {
+    const canvas = await fileToCanvas(file);
+    const { data } = await Tesseract.recognize(canvas, 'spa', {
       logger: m => {
         if (m.status === 'recognizing text') {
           progressText.textContent = `Leyendo imagen... ${Math.round((m.progress || 0) * 100)}%`;
