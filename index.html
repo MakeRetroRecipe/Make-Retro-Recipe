@@ -24923,6 +24923,7 @@ function setResourceMonsterEntry(resourceName, entry) {
 }
 
 let resourceDropPhotoResults = [];
+let resourceDropPhotoRawText = '';
 
 function openResourceDropPhotoModal() {
   if (!editingResourceName) {
@@ -24930,6 +24931,7 @@ function openResourceDropPhotoModal() {
     return;
   }
   resourceDropPhotoResults = [];
+  resourceDropPhotoRawText = '';
   const inputEl = document.getElementById('resource-drop-photo-input');
   if (inputEl) inputEl.value = '';
   document.getElementById('resource-drop-photo-progress').style.display = 'none';
@@ -24944,7 +24946,10 @@ function closeResourceDropPhotoModal() {
 function renderResourceDropPhotoResults() {
   const el = document.getElementById('resource-drop-photo-results');
   if (resourceDropPhotoResults.length === 0) {
-    el.innerHTML = '<p style="font-size:12.5px; color:#7a2416; font-weight:700;">No se ha reconocido ningun monstruo en la imagen. Prueba con una foto mas nitida o mas de cerca.</p>';
+    const debugText = resourceDropPhotoRawText.trim()
+      ? `<p style="margin-top:10px; font-size:11px; color:#5a4d2e;"><b>Texto que ha leido la imagen (para depurar):</b><br>${resourceDropPhotoRawText.trim().replace(/</g, '&lt;').replace(/\n/g, '<br>')}</p>`
+      : `<p style="margin-top:10px; font-size:11px; color:#5a4d2e;">La imagen no ha devuelto ningun texto legible — puede que el lector no haya podido cargarse bien (revisa tu conexion) o que la imagen sea demasiado pequeña/borrosa.</p>`;
+    el.innerHTML = `<p style="font-size:12.5px; color:#7a2416; font-weight:700;">No se ha reconocido ningun monstruo en la imagen. Prueba con una foto mas nitida o mas de cerca.</p>${debugText}`;
     document.getElementById('resource-drop-photo-apply').style.display = 'none';
     return;
   }
@@ -24994,6 +24999,7 @@ if (resourceDropPhotoInput) resourceDropPhotoInput.addEventListener('change', as
         }
       }
     });
+    resourceDropPhotoRawText = data.text || '';
     const parsed = parseDropTableOcrText(data.text || '');
     resourceDropPhotoResults = parsed.map(r => ({ ...r, enabled: true }));
     progressEl.style.display = 'none';
