@@ -20802,7 +20802,8 @@ function startFactoryResetCountdown() {
 function executeFactoryReset() {
   [STORAGE_KEY, PRICE_KEY, ORDER_KEY, CUSTOM_RES_KEY, CUSTOM_REC_KEY, REC_OVERRIDE_KEY, RES_OVERRIDE_KEY,
    HISTORY_KEY, CHAR_KEY, MONSTER_KEY, DROPREASON_KEY, STATS_KEY, ZONE_KEY, RECIPE_DROP_KEY,
-   DELETED_BASE_RECIPES_KEY, DELETED_BASE_RESOURCES_KEY, RESOURCE_TRASH_KEY, RECIPE_TRASH_KEY, RUNE_PRICE_KEY
+   DELETED_BASE_RECIPES_KEY, DELETED_BASE_RESOURCES_KEY, RESOURCE_TRASH_KEY, RECIPE_TRASH_KEY, RUNE_PRICE_KEY,
+   FAMILY_KEY
   ].forEach(k => localStorage.removeItem(k));
 
   have = {};
@@ -20833,11 +20834,13 @@ function executeFactoryReset() {
   resourceTrash = [];
   recipeTrash = [];
   runePrices = { "Ga Pa": 280000000, "Ga Pm": 60000000 };
+  familyOptions = [];
 
   saveHave(); savePrices(); saveOrder(); saveCustomResources(); saveCustomRecipes();
   saveRecipeOverrides(); saveResourceOverrides(); saveHistory(); saveCharacter(); saveMonsters();
   saveDropReasonOptions(); saveResourceStats(); saveZones(); saveRecipeDropStats();
   saveDeletedBaseRecipes(); saveDeletedBaseResources(); saveResourceTrash(); saveRecipeTrash(); saveRunePrices();
+  saveFamilyOptions();
 
   closeFactoryResetModal();
   buildWorkingData();
@@ -24424,28 +24427,7 @@ document.getElementById('btn-share-missing').addEventListener('click', async () 
 });
 
 document.getElementById('btn-export').addEventListener('click', () => {
-  const backup = {
-    exportedAt: new Date().toISOString(),
-    have: have,
-    prices: prices,
-    order: orderOverrides,
-    customResources: customResources,
-    customRecipes: customRecipes,
-    recipeOverrides: recipeOverrides,
-    resourceOverrides: resourceOverrides,
-    monsters: monsters,
-    zones: zones,
-    recipeDropStats: recipeDropStats,
-    resourceTrash: resourceTrash,
-    recipeTrash: recipeTrash,
-    deletedBaseRecipes: deletedBaseRecipes,
-    deletedBaseResources: deletedBaseResources,
-    dropReasonOptions: dropReasonOptions,
-    resourceStats: resourceStats,
-    character: character,
-    priceHistory: priceHistory,
-    runePrices: runePrices
-  };
+  const backup = gatherBackupData();
   const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -24467,27 +24449,7 @@ document.getElementById('import-file').addEventListener('change', (e) => {
   reader.onload = (ev) => {
     try {
       const backup = JSON.parse(ev.target.result);
-      if (backup.have) { have = { ...have, ...backup.have }; saveHave(); }
-      if (backup.prices) { prices = { ...prices, ...backup.prices }; savePrices(); }
-      if (backup.order) { orderOverrides = { ...orderOverrides, ...backup.order }; saveOrder(); }
-      if (backup.customResources) { customResources = backup.customResources; saveCustomResources(); }
-      if (backup.customRecipes) { customRecipes = backup.customRecipes; saveCustomRecipes(); }
-      if (backup.recipeOverrides) { recipeOverrides = backup.recipeOverrides; saveRecipeOverrides(); }
-      if (backup.resourceOverrides) { resourceOverrides = backup.resourceOverrides; saveResourceOverrides(); }
-      if (backup.monsters) { monsters = backup.monsters; saveMonsters(); }
-      if (backup.zones) { zones = backup.zones; saveZones(); }
-      if (backup.recipeDropStats) { recipeDropStats = backup.recipeDropStats; saveRecipeDropStats(); }
-      if (backup.resourceTrash) { resourceTrash = backup.resourceTrash; saveResourceTrash(); }
-      if (backup.recipeTrash) { recipeTrash = backup.recipeTrash; saveRecipeTrash(); }
-      if (backup.deletedBaseRecipes) { deletedBaseRecipes = backup.deletedBaseRecipes; saveDeletedBaseRecipes(); }
-      if (backup.deletedBaseResources) { deletedBaseResources = backup.deletedBaseResources; saveDeletedBaseResources(); }
-      if (backup.dropReasonOptions) { dropReasonOptions = backup.dropReasonOptions; saveDropReasonOptions(); }
-      if (backup.resourceStats) { resourceStats = backup.resourceStats; saveResourceStats(); }
-      if (backup.character) { character = backup.character; saveCharacter(); }
-      if (backup.priceHistory) { priceHistory = backup.priceHistory; saveHistory(); }
-      if (backup.runePrices) { runePrices = backup.runePrices; saveRunePrices(); }
-      migrateKnownNameFixes();
-      migrateResourceMonsterData();
+      applyBackupData(backup);
       render();
       showToast('Progreso importado correctamente, incluyendo tus recetas y recursos propios.', 'success');
     } catch (err) {
@@ -24737,22 +24699,8 @@ function ocrNormalize(str) {
   return jsStripAccents(String(str || '')).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
-function levenshtein(a, b) {
-  const m = a.length, n = b.length;
-  if (m === 0) return n;
-  if (n === 0) return m;
-  const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
-  for (let i = 0; i <= m; i++) dp[i][0] = i;
-  for (let j = 0; j <= n; j++) dp[0][j] = j;
-  for (let i = 1; i <= m; i++) {
-    for (let j = 1; j <= n; j++) {
-      dp[i][j] = a[i - 1] === b[j - 1]
-        ? dp[i - 1][j - 1]
-        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
-    }
-  }
-  return dp[m][n];
-}
+// Nota: la funcion levenshtein() ya esta definida mas arriba (se usa aqui tal cual, gracias al
+// hoisting de funciones de JS) — no hace falta redefinirla.
 
 // Busca, entre todos los recursos conocidos, el que mas se parezca al texto que ha leido el OCR
 // en esta linea. Devuelve null si ni el mejor candidato se parece lo suficiente, para no rellenar
